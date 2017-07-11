@@ -18,24 +18,61 @@ import (
 
 // Install struct for "install" sub command
 type Install struct {
-	perl5     string
-	rakudoURL string
+	perl5    string
+	rakudo   string
+	backends []backend
 	// Command line options
 	List    bool
 	Verbose bool
 	As      string
 }
 
+// backend struct represent perl6 backend
+type backend struct {
+	name      string
+	configure []string
+	requires  []string
+}
+
 func initInstall() *cobra.Command {
-	install := new(Install)
 	cmd := exec.Command("perl", "-e", `print $^X`)
 	cmd.Env = os.Environ()
 	perl5, err := cmd.CombinedOutput()
 	if err != nil {
 		panic(errors.Wrap(err, "Could not found perl5"))
 	}
-	install.perl5 = string(perl5)
-	install.rakudoURL = git.GetRemote("github.com", "rakudo", "rakudo")
+
+	perl := string(perl5)
+	rakudo := git.GetRemote("github.com", "rakudo", "rakudo")
+	moar := git.GetRemote("github.com", "MoarVM", "MoarVM")
+	nqp := git.GetRemote("github.com", "perl6", "nqp")
+	install := &Install{
+		perl5:  perl,
+		rakudo: rakudo,
+		backends: []backend{
+			backend{
+				name: "jvm",
+				configure: []string{
+					perl, "Configure.pl", "--backends=jvm", "--gen-nqp", `--git-reference=\"$git_reference\"`, "--make-install",
+				},
+				requires: []string{rakudo, nqp},
+			},
+			backend{
+				name: "moar",
+				configure: []string{
+					perl, "Configure.pl", "--backends=moar", "--gen-moar", `--git-reference=\"$git_reference\"`, "--make-install",
+				},
+				requires: []string{rakudo, nqp, moar},
+			},
+			backend{
+				name: "moar-blead",
+				configure: []string{
+					perl, "Configure.pl", "--backends=moar", "--gen-moar=master", "--gen-nqp=master", `--git-reference=\"$git_reference\"`, "--make-install",
+				},
+				requires: []string{rakudo, nqp, moar},
+			},
+		},
+	}
 
 	installCmd := &cobra.Command{
 		Use:           "install",
@@ -65,7 +102,7 @@ func (i *Install) run(cmd *cobra.Command, args []string) error {
 }
 
 func (i *Install) available() ([]byte, error) {
-	b, err := git.LsRemote([]string{"--tags"}, i.rakudoURL)
+	b, err := git.LsRemote([]string{"--tags"}, i.rakudo)
 	if err != nil {
 		return nil, err
 	}

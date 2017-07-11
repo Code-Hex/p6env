@@ -3,7 +3,11 @@ package p6env
 import (
 	"fmt"
 	"os"
+	"os/user"
 
+	"path/filepath"
+
+	"github.com/Code-Hex/p6env/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +23,26 @@ type p6env struct {
 	Help       bool
 	Version    bool
 	StackTrace bool
+}
+
+func init() {
+	u, err := user.Current()
+	if err != nil {
+		fmt.Fprintf(os.Stderr,
+			"Failed to get home directory: %s\n",
+			err.Error(),
+		)
+	}
+	home := u.HomeDir // get abs path
+	p6env := filepath.Join(home, ".p6env")
+	if !util.Exist(p6env) {
+		os.Mkdir(p6env, os.FileMode(0755))
+	}
+
+	versions := filepath.Join(p6env, "versions")
+	if !util.Exist(versions) {
+		os.Mkdir(versions, os.FileMode(0755))
+	}
 }
 
 func New() *p6env {
